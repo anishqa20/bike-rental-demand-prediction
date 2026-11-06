@@ -1,5 +1,5 @@
 
-# BIKE RENTAL DEMAND PREDICTION AND ANALYSIS USING PYTHON
+# BIKE RENTAL DEMAND CLASSIFICATION USING PYTHON
 
 # 1. IMPORT LIBRARIES
 
@@ -9,13 +9,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsRegressor
-from sklearn.tree import DecisionTreeRegressor, plot_tree
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import r2_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (accuracy_score, precision_score,
+    recall_score, f1_score, confusion_matrix, classification_report,
+    roc_curve, roc_auc_score )
 
 
 # 2. LOAD DATASET
@@ -84,7 +84,6 @@ print("\nDATASET WITH NEW FEATURES")
 print(df.head())
 
 
-
 # 5. EXPLORATORY DATA ANALYSIS
 
 # Graph 1: Average Bike Rentals by Hour
@@ -92,8 +91,8 @@ print(df.head())
 hourly_rentals = df.groupby("hour")["count"].mean()
 
 plt.figure(figsize=(10, 5))
-plt.plot(hourly_rentals.index, hourly_rentals.values, marker="o",
-         color="purple", linewidth=2)
+plt.plot(hourly_rentals.index, hourly_rentals.values,
+         marker="o", color="purple", linewidth=2)
 plt.fill_between(hourly_rentals.index, hourly_rentals.values,
                  color="purple", alpha=0.15)
 plt.title("Average Bike Rentals by Hour")
@@ -114,14 +113,16 @@ plt.bar(season_rentals.index, season_rentals.values,
 plt.title("Average Bike Rentals by Season")
 plt.xlabel("Season")
 plt.ylabel("Average Rentals")
-plt.xticks([1, 2, 3, 4], ["Spring", "Summer", "Fall", "Winter"])
+plt.xticks([1, 2, 3, 4],
+           ["Spring", "Summer", "Fall", "Winter"])
 plt.show()
 
 
 # Graph 3: Temperature vs Bike Rentals
 
 plt.figure(figsize=(9, 5))
-plt.scatter(df["temp"], df["count"], color="teal", alpha=0.4)
+plt.scatter(df["temp"], df["count"],
+            color="teal", alpha=0.4)
 plt.title("Temperature vs Bike Rentals")
 plt.xlabel("Temperature")
 plt.ylabel("Bike Rentals")
@@ -140,7 +141,8 @@ plt.title("Average Bike Rentals by Weather")
 plt.xlabel("Weather Condition")
 plt.ylabel("Average Rentals")
 plt.xticks([1, 2, 3, 4],
-           ["Clear", "Mist/Cloudy", "Light Rain/Snow", "Heavy Rain/Snow"])
+           ["Clear", "Mist/Cloudy", "Light Rain/Snow",
+            "Heavy Rain/Snow"])
 plt.show()
 
 
@@ -166,12 +168,28 @@ sns.heatmap(correlation, annot=True, cmap="Spectral", fmt=".2f")
 plt.title("Correlation Heatmap")
 plt.show()
 
+
 # 6. FEATURE ENGINEERING
 
 X = df.drop(["datetime", "casual", "registered", "count"], axis=1)
-y = df["count"]
 
-# Handle missing values in input features
+# Create binary target variable
+
+median_demand = df["count"].median()
+
+y = (df["count"] > median_demand).astype(int)
+
+print("\nDEMAND CLASSIFICATION")
+print("Median Rental Count:", median_demand)
+print("0 = Low Demand")
+print("1 = High Demand")
+
+print("\nCLASS DISTRIBUTION")
+print(y.value_counts())
+
+
+# Handle missing values
+
 for column in X.columns:
     if X[column].isnull().sum() > 0:
         if X[column].dtype == "object":
@@ -179,7 +197,9 @@ for column in X.columns:
         else:
             X[column] = X[column].fillna(X[column].median())
 
+
 # Convert categorical columns into numerical columns
+
 X = pd.get_dummies(X, columns=["season", "weather"], dtype=int)
 
 print("\nFEATURE COLUMNS")
@@ -188,16 +208,18 @@ print(X.columns.tolist())
 print("\nFEATURE DATA")
 print(X.head())
 
+
 # 7. TRAIN-TEST SPLIT
 
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42 )
+    X, y, test_size=0.2,random_state=42,stratify=y )
 
 print("\nTRAINING DATA SHAPE")
 print(X_train.shape)
 
 print("\nTESTING DATA SHAPE")
 print(X_test.shape)
+
 
 # 8. FEATURE SCALING
 
@@ -207,49 +229,31 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
 
-# 9. MODEL 1: LINEAR REGRESSION
+# 9. MODEL 1: LOGISTIC REGRESSION
 
-lr_model = LinearRegression()
+lr_model = LogisticRegression(max_iter=1000)
 
 lr_model.fit(X_train_scaled, y_train)
 
 lr_pred = lr_model.predict(X_test_scaled)
 
-lr_mae = mean_absolute_error(y_test, lr_pred)
-lr_mse = mean_squared_error(y_test, lr_pred)
-lr_rmse = np.sqrt(lr_mse)
-lr_r2 = r2_score(y_test, lr_pred)
-
-print("\nLINEAR REGRESSION RESULTS")
-print("MAE:", lr_mae)
-print("MSE:", lr_mse)
-print("RMSE:", lr_rmse)
-print("R2 Score:", lr_r2)
+lr_prob = lr_model.predict_proba(X_test_scaled)[:, 1]
 
 
-# 10. MODEL 2: KNN REGRESSION
+# 10. MODEL 2: KNN CLASSIFICATION
 
-knn_model = KNeighborsRegressor(n_neighbors=5)
+knn_model = KNeighborsClassifier(n_neighbors=5)
 
 knn_model.fit(X_train_scaled, y_train)
 
 knn_pred = knn_model.predict(X_test_scaled)
 
-knn_mae = mean_absolute_error(y_test, knn_pred)
-knn_mse = mean_squared_error(y_test, knn_pred)
-knn_rmse = np.sqrt(knn_mse)
-knn_r2 = r2_score(y_test, knn_pred)
-
-print("\nKNN REGRESSION RESULTS")
-print("MAE:", knn_mae)
-print("MSE:", knn_mse)
-print("RMSE:", knn_rmse)
-print("R2 Score:", knn_r2)
+knn_prob = knn_model.predict_proba(X_test_scaled)[:, 1]
 
 
-# 11. MODEL 3: DECISION TREE REGRESSION
+# 11. MODEL 3: DECISION TREE CLASSIFICATION
 
-dt_model = DecisionTreeRegressor(
+dt_model = DecisionTreeClassifier(
     random_state=42,
     max_depth=12,
     min_samples_leaf=5
@@ -259,38 +263,30 @@ dt_model.fit(X_train, y_train)
 
 dt_pred = dt_model.predict(X_test)
 
-dt_mae = mean_absolute_error(y_test, dt_pred)
-dt_mse = mean_squared_error(y_test, dt_pred)
-dt_rmse = np.sqrt(dt_mse)
-dt_r2 = r2_score(y_test, dt_pred)
-
-print("\nDECISION TREE RESULTS")
-print("MAE:", dt_mae)
-print("MSE:", dt_mse)
-print("RMSE:", dt_rmse)
-print("R2 Score:", dt_r2)
+dt_prob = dt_model.predict_proba(X_test)[:, 1]
 
 
-# 12. COLOURFUL DECISION TREE VISUALIZATION
+# 12. DECISION TREE VISUALIZATION
 
 plt.figure(figsize=(20, 10))
 
 plot_tree(
     dt_model,
     feature_names=X.columns,
+    class_names=["Low Demand", "High Demand"],
     filled=True,
     rounded=True,
     max_depth=3,
     fontsize=8
 )
 
-plt.title("Decision Tree Visualization")
+plt.title("Decision Tree Classification Visualization")
 plt.show()
 
 
-# 13. MODEL 4: RANDOM FOREST REGRESSION
+# 13. MODEL 4: RANDOM FOREST CLASSIFICATION
 
-rf_model = RandomForestRegressor(
+rf_model = RandomForestClassifier(
     n_estimators=100,
     random_state=42,
     min_samples_leaf=2,
@@ -301,89 +297,124 @@ rf_model.fit(X_train, y_train)
 
 rf_pred = rf_model.predict(X_test)
 
-rf_mae = mean_absolute_error(y_test, rf_pred)
-rf_mse = mean_squared_error(y_test, rf_pred)
-rf_rmse = np.sqrt(rf_mse)
-rf_r2 = r2_score(y_test, rf_pred)
-
-print("\nRANDOM FOREST RESULTS")
-print("MAE:", rf_mae)
-print("MSE:", rf_mse)
-print("RMSE:", rf_rmse)
-print("R2 Score:", rf_r2)
+rf_prob = rf_model.predict_proba(X_test)[:, 1]
 
 
-# 14. MODEL COMPARISON
+# 14. MODEL EVALUATION
 
-results = pd.DataFrame({
+models = [
+    ("Logistic Regression", lr_pred, lr_prob),
+    ("KNN Classifier", knn_pred, knn_prob),
+    ("Decision Tree", dt_pred, dt_prob),
+    ("Random Forest", rf_pred, rf_prob)
+]
 
-    "Model": ["Linear Regression","KNN Regression","Decision Tree","Random Forest"],
+results = []
 
-    "MAE": [lr_mae,knn_mae,dt_mae,rf_mae],
+for name, pred, prob in models:
 
-    "MSE": [lr_mse,knn_mse,dt_mse,rf_mse],
+    acc = accuracy_score(y_test, pred)
+    pre = precision_score(y_test, pred, zero_division=0)
+    rec = recall_score(y_test, pred, zero_division=0)
+    f1 = f1_score(y_test, pred, zero_division=0)
+    auc = roc_auc_score(y_test, prob)
 
-    "RMSE": [lr_rmse,knn_rmse,dt_rmse,rf_rmse],
+    results.append([name, acc, pre, rec, f1, auc])
 
-    "R2 Score": [lr_r2,knn_r2,dt_r2,rf_r2]})
+    print("\n", name)
+    print(classification_report(y_test, pred,
+          target_names=["Low Demand", "High Demand"],
+          zero_division=0))
 
-print("\nMODEL COMPARISON")
+
+# 15. MODEL COMPARISON
+
+results = pd.DataFrame(results, columns=[
+    "Model", "Accuracy", "Precision",
+    "Recall", "F1 Score", "ROC AUC"
+])
+
 print(results)
 
 
-# 15. COLOURFUL RMSE COMPARISON GRAPH
+# 16. ACCURACY COMPARISON GRAPH
 
-plt.figure(figsize=(9, 5))
-plt.bar(results["Model"], results["RMSE"],
-        color=["#9370DB", "#20B2AA", "#FFA500", "#FF69B4"])
-plt.title("RMSE Comparison of Machine Learning Models")
+plt.figure(figsize=(10, 5))
+
+plt.bar(
+    results["Model"],
+    results["Accuracy"],
+    color=["#9370DB", "#20B2AA", "#FFA500", "#FF69B4"]
+)
+
+plt.title("Accuracy Comparison of Classification Models")
 plt.xlabel("Machine Learning Models")
-plt.ylabel("RMSE")
+plt.ylabel("Accuracy")
+plt.ylim(0, 1)
 plt.xticks(rotation=15)
 plt.show()
 
-# 16. COLOURFUL ACTUAL VS PREDICTED GRAPHS
+
+# 17. CONFUSION MATRIX GRAPHS
 
 predictions = [
-    ("Linear Regression", lr_pred, "#3498DB"),
-    ("KNN Regression", knn_pred, "#E67E22"),
-    ("Decision Tree", dt_pred, "#2ECC71"),
-    ("Random Forest", rf_pred, "#9B59B6")
+    ("Logistic Regression", lr_pred),
+    ("KNN Classifier", knn_pred),
+    ("Decision Tree", dt_pred),
+    ("Random Forest", rf_pred)
 ]
 
-for model_name, prediction, graph_color in predictions:
+fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    plt.figure(figsize=(7, 5))
+for ax, (model_name, prediction) in zip(axes.flatten(), predictions):
 
-    plt.scatter(
-        y_test,
-        prediction,
-        color=graph_color,
-        alpha=0.55,
-        edgecolors="white"
+    cm = confusion_matrix(y_test, prediction)
+
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt="d",
+        cmap="YlGnBu",
+        xticklabels=["Low Demand", "High Demand"],
+        yticklabels=["Low Demand", "High Demand"],
+        ax=ax
     )
 
-    minimum = min(y_test.min(), prediction.min())
-    maximum = max(y_test.max(), prediction.max())
+    ax.set_title(model_name)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+
+plt.tight_layout()
+plt.show()
+
+
+# 18. ROC CURVE COMPARISON
+
+plt.figure(figsize=(9, 6))
+
+for model_name, prediction, probability in models:
+
+    fpr, tpr, thresholds = roc_curve(y_test, probability)
+
+    auc = roc_auc_score(y_test, probability)
 
     plt.plot(
-        [minimum, maximum],
-        [minimum, maximum],
-        color="#E74C3C",
-        linestyle="--",
+        fpr, tpr,
         linewidth=2,
-        label="Perfect Prediction"
+        label=model_name + " (AUC = " + str(round(auc, 3)) + ")"
     )
 
-    plt.title("Actual vs Predicted - " + model_name)
-    plt.xlabel("Actual Rentals")
-    plt.ylabel("Predicted Rentals")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+plt.plot([0, 1], [0, 1], "k--", label="Random Classifier")
+
+plt.title("ROC Curve Comparison")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend()
+plt.grid(alpha=0.3)
+plt.show()
 
 
-# 17. COLOURFUL RANDOM FOREST FEATURE IMPORTANCE
+# 19. RANDOM FOREST FEATURE IMPORTANCE
 
 feature_importance = pd.DataFrame({
     "Feature": X.columns,
@@ -398,6 +429,7 @@ print("\nRANDOM FOREST FEATURE IMPORTANCE")
 print(feature_importance)
 
 plt.figure(figsize=(10, 6))
+
 sns.barplot(
     data=feature_importance.head(10),
     x="Importance",
@@ -406,14 +438,16 @@ sns.barplot(
     palette="viridis",
     legend=False
 )
+
 plt.title("Random Forest Feature Importance")
 plt.xlabel("Importance")
 plt.ylabel("Features")
 plt.show()
 
-# 18. AUTOMATIC FINDINGS
 
-print("\n====== PROJECT FINDINGS =======")
+# 20. AUTOMATIC FINDINGS
+
+print("\nPROJECT FINDINGS")
 
 print("Busiest Hour:", hourly_rentals.idxmax())
 
@@ -428,21 +462,26 @@ print("Highest Average Rentals by Day Type:",
 print("Average Bike Rentals:",
       round(df["count"].mean(), 2))
 
+print("Median Bike Rentals:", median_demand)
 
-# 19. BEST MODEL SELECTION
 
-best_model = results.loc[results["RMSE"].idxmin()]
+# 21. BEST MODEL SELECTION
 
-print("\n====== BEST MODEL ======")
+best_model = results.loc[results["F1 Score"].idxmax()]
+
+print("\nBEST MODEL")
 
 print("Best Model:", best_model["Model"])
 
-print("MAE:", best_model["MAE"])
+print("Accuracy:", best_model["Accuracy"])
 
-print("MSE:", best_model["MSE"])
+print("Precision:", best_model["Precision"])
 
-print("RMSE:", best_model["RMSE"])
+print("Recall:", best_model["Recall"])
 
-print("R2 Score:", best_model["R2 Score"])
+print("F1 Score:", best_model["F1 Score"])
+
+print("ROC AUC:", best_model["ROC AUC"])
+
 
 print("\nPROJECT EXECUTION COMPLETED!")
